@@ -53,7 +53,7 @@ The following tsconfig.json file will add the transformer plugin like the follow
     "src"
   ]
 }
-
+```
 
 ### Add environment file
 NOTE may wish to add this file to `.gitignore`:
@@ -63,8 +63,9 @@ PRIVATE_KEY_FILE=${PRIVATE_KEY_FILE:-~/<location>/queryscope/private}
 export QUERYSCOPE_PRIVATE_KEY="$(<unencrypt-tool> $PRIVATE_KEY_FILE)"
 export QUERYSCOPE_ISSUER=$(cat $PRIVATE_KEY_FILE.issuer_name.txt)
 export QUERYSCOPE_CLIENT_ID=$(cat ./application_name.txt)
+```
 
-## Build
+## Build with queryscope
 
 ### Manual or local developer build
 During development work the `tsc` command may be used which skips token generation if the application is setup to ignore queryscope verification for development environments. This makes for an easier development workflow and doesn't require the developers to have access to the queryscope issuer's private key. However if we wish to generate tokens in the build, once we import the queryscope module (or copy over the npm package) we can build with the typescript transformer command.
