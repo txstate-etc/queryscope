@@ -1,6 +1,6 @@
 {
   "name": "queryscope",
-  "version": "0.1.5",
+  "version": "1.0.0",
   "description": "Client QueryScope token build time generator for TypeScript based GraphQL projects",
   "exports": {
     "require": "./dist/lib/index.js"

@@ -15,14 +15,12 @@ and thus the application utilizing this module will require the ttypescript modu
 run the transformers.
 
 ### Add ttypescript to dependencies of typescript based application
-At this time for testing we are using local_modules to store the QueryScope module, however, as an npm package that will not be necessary.
-
 The following package.json file will have something like the following:
 ```json
 {
   "dependencies": {
     "@types/node": "^14.14.34",
-    "queryscope": "file:./local_modules/queryscope-0.1.3.tgz",
+    "queryscope": "^1.0.0",
     "ts-node": "^9.1.1",
     "ttypescript": "^1.5.8",
     "typescript": "^4.0.3",
@@ -55,17 +53,28 @@ The following tsconfig.json file will add the transformer plugin like the follow
 }
 ```
 
-### Add environment file
-NOTE may wish to add this file to `.gitignore`:
+### Add env.sh environment file
+NOTE: This would be like a docker-compose.override.yml that has credentials that doesn't get checked into the repo.
 ```bash
 #!/bin/bash
-PRIVATE_KEY_FILE=${PRIVATE_KEY_FILE:-~/<location>/queryscope/private}
-export QUERYSCOPE_PRIVATE_KEY="$(<unencrypt-tool> $PRIVATE_KEY_FILE)"
-export QUERYSCOPE_ISSUER=$(cat $PRIVATE_KEY_FILE.issuer_name.txt)
-export QUERYSCOPE_CLIENT_ID=$(cat ./application_name.txt)
+export DECRYPT_CMD="<decryption command here>"
+export KEYS_DIR=${KEYS_DIR:-<queryscope key directory>}
+
+# Example of how to generate RSA private and public keys for queryscope module usage
+# mkdir -p "$KEYS_DIR/"
+# echo "QSExampleIssuer" > "$KEYS_DIR/issuer.txt"
+# openssl genrsa 2048 2>/dev/null >"$KEYS_DIR/private"
+# cat "${KEYS_DIR}/private" | openssl rsa -outform PEM -pubout 2>/dev/null >"$KEYS_DIR/public"
+# <encryption command here> "${KEYS_DIR}/private"
+
+export QUERYSCOPE_PRIVATE_KEY="$($DECRYPT_CMD $KEYS_DIR/private)"
+export QUERYSCOPE_ISSUER=$(cat $KEYS_DIR/issuer.txt)
+
+# The QUERYSCOPE_CLIENT_ID may come from a file in the project, or pulled from the package.json
+export QUERYSCOPE_CLIENT_ID=QSExampleClientId
 ```
 
-## Build with queryscope
+## Building with queryscope
 
 ### Manual or local developer build
 During development work the `tsc` command may be used which skips token generation if the application is setup to ignore queryscope verification for development environments. This makes for an easier development workflow and doesn't require the developers to have access to the queryscope issuer's private key. However if we wish to generate tokens in the build, once we import the queryscope module (or copy over the npm package) we can build with the typescript transformer command.
@@ -75,40 +84,38 @@ During development work the `tsc` command may be used which skips token generati
 ```
 
 ### Docker build
-At this time for testing we are pulling in the local_modules directory where we store the QueryScope npm package. When using npm install to download queryscope package these steps may be removed.
 ```Dockerfile
-Dockerfile 
 FROM node:14-alpine as build
+RUN echo -e "\nADDING ARGUMENTS (for building):"
 ARG QUERYSCOPE_PRIVATE_KEY
 ARG QUERYSCOPE_CLIENT_ID
 ARG QUERYSCOPE_ISSUER
 WORKDIR /usr/app
 COPY package.json package-lock.json ./
-COPY local_modules local_modules
 RUN npm ci
 COPY src src
-#COPY test test
 COPY tsconfig.json ./
 RUN npm run build
-#RUN npm test
 
 FROM node:14-alpine
-ENV QUERYSCOPE_VERSION=0.1.3
+RUN echo -e "\nADDING ARGUMENTS (for testing):"
+ARG QUERYSCOPE_CLIENT_ID
+ARG QUERYSCOPE_ISSUER
 WORKDIR /usr/app
-#RUN mkdir -p /usr/app/src/static
-#COPY src/static ./src/static
 COPY --from=build /usr/app/dist dist
 COPY package.json package-lock.json ./
-COPY local_modules local_modules
 RUN npm ci --production
-RUN npm test
+RUN npm run test
+RUN echo -e "\nADDING ENVIRONMENT (for production image):"
+ENV QUERYSCOPE_CLIENT_ID=$QUERYSCOPE_CLIENT_ID
 ENV NODE_ENV='production'
-ENV TZ='America/Chicago'
-ENTRYPOINT [ "npm" ]
-CMD [ "start" ]
+RUN echo -e "\nADDING LABLES (for production image):"
+LABEL queryscope-client-id=$QUERYSCOPE_CLIENT_ID
+LABEL queryscope-issuer=$QUERYSCOPE_ISSUER
+CMD [ "npm", "run", "start" ]
 ```
 
-This is what a docker-build.sh build script may look like:
+This is what a docker-build.sh build script may look like (which could be replaced by a docker-compose.yml file):
 ```
 #!/bin/bash
 . env.sh
@@ -120,3 +127,4 @@ docker build --build-arg QUERYSCOPE_PRIVATE_KEY="$QUERYSCOPE_PRIVATE_KEY" \
 	     --build-arg QUERYSCOPE_ISSUER="$QUERYSCOPE_ISSUER" \
 	     -t $REGISTRY/$APPLICATION:$TAG .
 ```
+The image will now include the generated tokens for all the QueryScope types found within the TypeScript code.
