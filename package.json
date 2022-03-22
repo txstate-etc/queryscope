@@ -1,18 +1,17 @@
 {
   "name": "queryscope",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Client QueryScope token build time generator for TypeScript based GraphQL projects",
   "exports": {
     "require": "./dist/lib/index.js"
   },
-  "types": "dist/lib/index.d.ts",
   "scripts": {
-    "prepublishOnly": "npm run build",
     "build": "rm -rf dist && tsc",
-    "mocha": "TS_NODE_PROJECT=test/tsconfig.json mocha -r ts-node/register test/**/*.ts --exit",
-    "test": "./test.sh",
-    "start": "ts-node test/index.ts"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "files": [
+    "dist/**/*"
+  ],
   "devDependencies": {
     "@types/jsonwebtoken": "^8.5.8",
     "@types/mocha": "^9.0.0",
@@ -26,24 +25,21 @@
     "typescript": "^4.0.3",
     "jsonwebtoken": "^8.5.1"
   },
-  "author": "Chas Tabor",
-  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/txstate-etc/queryscope.git"
+    "url": "git+https://github.com/txstate-etc/queryscope.git"
   },
   "keywords": [
     "codemod",
     "graphql",
     "transformer",
     "typescript",
-    "queryscope"
+    "queryscoping"
   ],
+  "author": "Chas Tabor",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/txstate-etc/queryscope/issues"
   },
-  "homepage": "https://github.com/txstate-etc/queryscope#readme",
-  "files": [
-    "dist/**/*"
-  ]
+  "homepage": "https://github.com/txstate-etc/queryscope#readme"
 }
