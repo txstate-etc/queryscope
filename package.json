@@ -1,17 +1,19 @@
 {
   "name": "queryscope",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Client QueryScope token build time generator for TypeScript based GraphQL projects",
   "exports": {
     "require": "./dist/lib/index.js"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "rm -rf dist && tsc -p .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "files": [
     "dist/**/*"
   ],
+  "main": "./dist/lib/index.js",
+  "types": "./dist/lib/index.d.ts",
   "devDependencies": {
     "@types/jsonwebtoken": "^8.5.8",
     "@types/mocha": "^9.0.0",
