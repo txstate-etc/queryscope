@@ -18,12 +18,16 @@ run the transformers.
 The following package.json file will have something like the following:
 ```json
 {
-  "dependencies": {
+  "devDependencies": {
+    "@types/mocha": "^9.0.0",
     "@types/node": "^14.14.34",
-    "queryscope": "^1.0.0",
     "ts-node": "^9.1.1",
     "ttypescript": "^1.5.8",
     "typescript": "^4.0.3",
+    "mocha": "^9.1.2"
+  },
+  "dependencies": {
+    "queryscope": "^1.0.1",
   }
 }
 ```
