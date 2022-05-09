@@ -1,0 +1,34 @@
+{
+  "name": "queryscope-tests",
+  "version": "0.1.0",
+  "description": "Query Scope Token generator for Typescript based example project",
+  "main": "index.js",
+  "scripts": {
+    "test": "node ./dist/index.js",
+    "mochatest": "TS_NODE_PROJECT=./tests/tsconfig.json; mocha --require=ts-node/register test/**/*.tests.ts",
+    "build": "ttsc",
+    "start": "node ./dist/index.js"
+  },
+  "author": "Chas Tabor",
+  "license": "MIT",
+  "keywords": [
+    "graphql",
+    "typescript",
+    "codemod",
+    "queryscoping"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://git.txstate.edu/mws/queryscope-example.git"
+  },
+  "devDependencies": {
+    "@types/mocha": "^9.0.0",
+    "@types/chai": "^4.2.16",
+    "@types/node": "^14.14.34",
+    "ts-node": "^9.1.1",
+    "ttypescript": "^1.5.8",
+    "typescript": "^4.0.3",
+    "mocha": "^9.1.2",
+    "chai": "^4.3.4"
+  }
+}

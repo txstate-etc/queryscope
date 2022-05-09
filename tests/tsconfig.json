@@ -1,0 +1,21 @@
+{
+  "ts-node": {
+    "compiler": "ttypescript"
+  },
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "declaration": true,
+    "outDir": "./dist",
+    "strict": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "plugins": [
+      {
+        "transform": "./transformers/tokenizer.ts",
+       	"type": "raw"
+      }
+    ]
+  }
+}
