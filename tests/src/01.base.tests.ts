@@ -1,9 +1,8 @@
 import { expect } from 'chai'
 import { QueryScope, QueryScopePart } from '../../lib/index'
+import { querypart2 } from './fixtures'
 
 // Parts
-const querypart2: QueryScopePart = '  2'
-
 const querypart3: QueryScopePart = `  3`
 
 const querypart4: QueryScopePart = `${querypart2}
