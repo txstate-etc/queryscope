@@ -3,4 +3,4 @@ export interface QueryScope {
   token?: string
 }
 
-export type QueryScopePart = String
+export type QueryScopePart = string
