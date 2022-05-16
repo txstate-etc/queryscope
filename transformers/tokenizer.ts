@@ -27,23 +27,15 @@ enum QSState {
   QSObjectLiteralExpression = 'QUERYSCOPE_OBJECT_LITERAL_EXPRESSION'
 }
 
-type TransformerOptions = {
-  privateKey?: string,
-  issuer?: string,
-  clientId?: string
-}
+const foundQueryScopeParts = new Map<string, string>()
 
-export function transformer(program: ts.Program, opts?: TransformerOptions) {
-  // Create array of found QueryScopeParts
-  const foundQueryScopeParts = new Map<string, string>()
-  let templateExpanded: string;
-
-  function visitor(ctx: ts.TransformationContext, sf: ts.SourceFile) {
-    const typeChecker = program.getTypeChecker();
-
-    let state: QSState = QSState.Start
+const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
+  console.log("Signing client %s queries with %s issuer.", QUERYSCOPE_CLIENT_ID, QUERYSCOPE_ISSUER)
+  return sourceFile => {
     let variable: string|undefined
     let query = false
+    let state = QSState.Start
+    let templateExpanded: string;
     //   TemplateExpresson:
     //     TemplateHead,
     //     TemplateSpan(Identifier,TemplateMiddle),
@@ -78,8 +70,7 @@ export function transformer(program: ts.Program, opts?: TransformerOptions) {
       if (ts.isIdentifier(node) && node.getText() === 'query') {
         query = true
       } else if (query && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) ) ) {
-        startTemplateExpander(node)
-        return node
+        return startTemplateExpander(node)
       }
       return ts.visitEachChild(node, queryScopeObject, ctx)
     };
@@ -109,7 +100,6 @@ export function transformer(program: ts.Program, opts?: TransformerOptions) {
         console.log('WARN: No QUERYSCOPE private key cert or client id was found. Will skip token signing process.')
         return node
       }
-      console.log("Signing client %s queries with %s issuer.", QUERYSCOPE_CLIENT_ID, QUERYSCOPE_ISSUER)
       if (ts.isVariableDeclaration(node)) {
         state = QSState.VariableDeclaration
         variable = undefined
@@ -128,23 +118,16 @@ export function transformer(program: ts.Program, opts?: TransformerOptions) {
       } else if (state === QSState.QSPTypeReference) {
         if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) {
           state = QSState.Start
-          return node
-          //return startTemplateExpander(node)
+          return startTemplateExpander(node)
         }
       } else if (state === QSState.QSTypeReference && ts.isObjectLiteralExpression(node)) {
         state = QSState.Start
-        return node
-        //return startQueryScopeObject(node)
+        return startQueryScopeObject(node)
       }
       return ts.visitEachChild(node, visitor, ctx)
     };
-    return visitor
-  }
-
-  return (ctx: ts.TransformationContext) => {
-    console.log("Got to this point")
-    return (sf: ts.SourceFile) => ts.visitNode(sf, visitor(ctx, sf))
+    return ts.visitNode(sourceFile, visitor);
   };
-}
+};
 
 export default transformer;
