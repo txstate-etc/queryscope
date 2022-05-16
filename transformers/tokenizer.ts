@@ -28,53 +28,75 @@ enum QSState {
 }
 
 const foundQueryScopeParts = new Map<string, string>()
-
 const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
   console.log("Signing client %s queries with %s issuer.", QUERYSCOPE_CLIENT_ID, QUERYSCOPE_ISSUER)
   return sourceFile => {
     let variable: string|undefined
     let query = false
     let state = QSState.Start
-    let templateExpanded: string;
+    let queryTemplateExpanded = ''
     //   TemplateExpresson:
     //     TemplateHead,
     //     TemplateSpan(Identifier,TemplateMiddle),
     //     TemplateSpan(Identifier,TemplateTail)
-    const templateExpander = (node: ts.Node): ts.Node => {
-      if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-        templateExpanded = node.getText().replace(/(^["'`])|(["'`]$)/g, '')
-        if (!query) foundQueryScopeParts.set(variable || 'unknown', templateExpanded)
-        console.log('  templateExpander %s = %s', variable, JSON.stringify(templateExpanded))
-        return node
-      } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node)) {
-        templateExpanded += node.text
-      } else if (ts.isIdentifier(node)) {
-        if (foundQueryScopeParts.has(node.getText())) {
-          templateExpanded += foundQueryScopeParts.get(node.getText())
-        } else {
-          throw Error('QueryScopePart '+node.getText()+' not found.')
-        }
-      } else if (ts.isTemplateTail(node)) {
-        templateExpanded += node.text
-        console.log('  templateExpander - tail: %s', JSON.stringify(templateExpanded))
-        if (!query) foundQueryScopeParts.set(variable || 'unknown', templateExpanded)
-      }
-      return ts.visitEachChild(node, templateExpander, ctx)
-    };
     const startTemplateExpander = (node: ts.Node): ts.Node => {
-      templateExpanded = ''
-      console.log('Start template expander: %s', variable)
+      if (foundQueryScopeParts.has(variable || '_unknown')) {
+        throw Error('QueryScopePart ' + variable + 'name is already used')
+      }
+      const templateExpander = (node: ts.Node): ts.Node => {
+        if (variable == null) {
+          variable = '_unknown'
+        }
+        if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+          foundQueryScopeParts.set(variable, node.getText().replace(/(^["'`])|(["'`]$)/g, ''))
+          return node
+        } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node)) {
+          // May need to reset when head if variable names are allowed to be reused.
+          foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + node.text)
+        } else if (ts.isIdentifier(node)) {
+          if (foundQueryScopeParts.has(node.getText())) {
+            foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + foundQueryScopeParts.get(node.getText()))
+          } else {
+            throw Error('QueryScopePart ' + node.getText() + ' not found.')
+          }
+        } else if (ts.isTemplateTail(node)) {
+          foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + node.text)
+        }
+        return ts.visitEachChild(node, templateExpander, ctx)
+      };
       return templateExpander(node)
     };
-    const queryScopeObject = (node: ts.Node): ts.Node => {
-      if (ts.isIdentifier(node) && node.getText() === 'query') {
-        query = true
-      } else if (query && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) ) ) {
-        return startTemplateExpander(node)
-      }
-      return ts.visitEachChild(node, queryScopeObject, ctx)
-    };
     const startQueryScopeObject = (node: ts.Node): ts.Node => {
+      let queryTemplateExpanded = ''
+      const startQueryTemplateExpander = (node: ts.Node): ts.Node => {
+        //let templateExpanded = ''
+        const queryTemplateExpander = (node: ts.Node): ts.Node => {
+          if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+            queryTemplateExpanded = node.getText().replace(/(^["'`])|(["'`]$)/g, '')
+            return node
+          } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node)) {
+            queryTemplateExpanded += node.text
+          } else if (ts.isIdentifier(node)) {
+            if (foundQueryScopeParts.has(node.getText())) {
+              queryTemplateExpanded += foundQueryScopeParts.get(node.getText())
+            } else {
+              throw Error('QueryScopePart '+node.getText()+' not found.')
+            }
+          } else if (ts.isTemplateTail(node)) {
+            queryTemplateExpanded += node.text
+          }
+          return ts.visitEachChild(node, queryTemplateExpander, ctx)
+        };
+        return queryTemplateExpander(node)
+      };
+      const queryScopeObject = (node: ts.Node): ts.Node => {
+        if (ts.isIdentifier(node) && node.getText() === 'query') {
+          query = true
+        } else if (query && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) ) ) {
+          return startQueryTemplateExpander(node)
+        }
+        return ts.visitEachChild(node, queryScopeObject, ctx)
+      };
       // There is an invalid case where TypeScript would produce an error
       // during compilation, should no query property is found.
       // Check if token mataches query and if not then return with all properties with new token value.
@@ -84,11 +106,11 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
       // all properties with an appended token property and the generated token value
       const newNode = queryScopeObject(node)
       query = false
-      const token = syncSignQueryDigest(templateExpanded)
+      const token = syncSignQueryDigest(queryTemplateExpanded)
       // console.log("Found variable %s, with only query: %s, and new token %s", variableId, JSON.stringify(query), token)
       if (token != null) {
         return ts.factory.createObjectLiteralExpression([
-          ts.factory.createPropertyAssignment('query', ts.factory.createStringLiteral(templateExpanded)),
+          ts.factory.createPropertyAssignment('query', ts.factory.createStringLiteral(queryTemplateExpanded)),
           ts.factory.createPropertyAssignment('token', ts.factory.createStringLiteral(token))
         ])
       } else {
@@ -108,10 +130,8 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
       } else if (state === QSState.VariableDeclaration && ts.isTypeReferenceNode(node)) {
         if (node.getText() === 'QueryScopePart') {
           state = QSState.QSPTypeReference
-          console.log('QueryScopePart variable declaration: %s', variable)
         } else if (node.getText() === 'QueryScope') {
           state = QSState.QSTypeReference
-          console.log('QueryScope variable declaration: %s', variable)
         } else {
           state = QSState.Start
         }
