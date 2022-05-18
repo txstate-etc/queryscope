@@ -19,12 +19,9 @@ function syncSignQueryDigest (query: string): string|undefined {
   return undefined
 }
 
-enum QSState {
-  Start = 'START',
-  VariableDeclaration = 'VARIABLE_DECLARATION',
-  QSPTypeReference = 'QUERYSCOPEPART_TYPE_REFERENCE',
-  QSTypeReference = 'QUERYSCOPE_TYPE_REFERENCE',
-  QSObjectLiteralExpression = 'QUERYSCOPE_OBJECT_LITERAL_EXPRESSION'
+enum QSType {
+  QueryScope = 'QUERY_SCOPE',
+  QueryScopePart = 'QUERY_SCOPE_PART',
 }
 
 const foundQueryScopeParts = new Map<string, string>()
@@ -35,36 +32,34 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
     console.log("Signing client %s queries with %s issuer.", QUERYSCOPE_CLIENT_ID, QUERYSCOPE_ISSUER)
   }
   return sourceFile => {
-    let variable: string|undefined
-    let query = false
-    let state = QSState.Start
-    let queryTemplateExpanded = ''
+    let variableName: string|undefined
     //   TemplateExpresson:
     //     TemplateHead,
     //     TemplateSpan(Identifier,TemplateMiddle),
     //     TemplateSpan(Identifier,TemplateTail)
     const startPartExpander = (node: ts.Node): ts.Node => {
-      if (foundQueryScopeParts.has(variable || '_unknown')) {
-        throw Error('QueryScopePart ' + variable + 'name is already used')
+      if (foundQueryScopeParts.has(variableName || '_unknown')) {
+        throw Error('QueryScopePart ' + variableName + 'name is already used')
       }
+      // should drill down until pass QueryScopePart identifier
       const partExpander = (node: ts.Node): ts.Node => {
-        if (variable == null) {
-          variable = '_unknown'
+        if (variableName == null) {
+          variableName = '_unknown'
         }
         if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-          foundQueryScopeParts.set(variable, node.getText().replace(/(^["'`])|(["'`]$)/g, ''))
+          foundQueryScopeParts.set(variableName, node.getText().replace(/(^["'`])|(["'`]$)/g, ''))
           return node
         } else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node)) {
           // May need to reset when head if variable names are allowed to be reused.
-          foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + node.text)
+          foundQueryScopeParts.set(variableName, (foundQueryScopeParts.get(variableName) ?? '') + node.text)
         } else if (ts.isIdentifier(node)) {
           if (foundQueryScopeParts.has(node.getText())) {
-            foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + foundQueryScopeParts.get(node.getText()))
+            foundQueryScopeParts.set(variableName, (foundQueryScopeParts.get(variableName) ?? '') + foundQueryScopeParts.get(node.getText()))
           } else {
-            throw Error('QueryScopePart ' + node.getText() + ' not found.')
+              throw Error('QueryScopePart variable: ' + node.getText() + ' not found.')
           }
         } else if (ts.isTemplateTail(node)) {
-          foundQueryScopeParts.set(variable, (foundQueryScopeParts.get(variable) ?? '') + node.text)
+          foundQueryScopeParts.set(variableName, (foundQueryScopeParts.get(variableName) ?? '') + node.text)
           return node
         }
         return ts.visitEachChild(node, partExpander, ctx)
@@ -72,7 +67,9 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
       return partExpander(node)
     };
     const startQueryScopeObject = (node: ts.Node): ts.Node => {
+      let query = false
       let queryExpanded = ''
+      // should drill down until pass QueryScope identifier
       const startQueryExpander = (node: ts.Node): ts.Node => {
         const queryExpander = (node: ts.Node): ts.Node => {
           if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
@@ -84,7 +81,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
             if (foundQueryScopeParts.has(node.getText())) {
               queryExpanded += foundQueryScopeParts.get(node.getText())
             } else {
-              throw Error('QueryScopePart '+node.getText()+' not found.')
+                throw Error('QueryScopePart '+node.getText()+' not found.')
             }
           } else if (ts.isTemplateTail(node)) {
             queryExpanded += node.text
@@ -109,9 +106,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
       // Check declorator to see if we wish to maintain this query and if so then return
       // all properties with an appended token property and the generated token value
       const newNode = queryScopeObject(node)
-      query = false
       const token = syncSignQueryDigest(queryExpanded)
-      // console.log("Found variable %s, with only query: %s, and new token %s", variableId, JSON.stringify(query), token)
       if (token != null) {
         return ts.factory.createObjectLiteralExpression([
           ts.factory.createPropertyAssignment('query', ts.factory.createStringLiteral(queryExpanded)),
@@ -121,45 +116,43 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
         return newNode
       }
     };
-    const visitor = (node: ts.Node): ts.Node => {
+    const visitor = (node: ts.Node): ts.Node|undefined => {
       // Skip queryscope signing process if no client_id or private_key are provided
       // This is mostly for development work where signatures are not used.
       if (QUERYSCOPE_CLIENT_ID == null || QUERYSCOPE_PRIVATE_KEY == null) {
         return node
       }
-      let removeNode = false
+      let objectType: QSType|undefined
       const visitConstVariable = (node: ts.Node): ts.Node => {
-        if (ts.isVariableDeclaration(node)) {
-          state = QSState.VariableDeclaration
-          variable = undefined
-        } else if (state === QSState.VariableDeclaration && ts.isIdentifier(node)) {
-          variable = node.getText()
-        } else if (state === QSState.VariableDeclaration && ts.isTypeReferenceNode(node)) {
-          if (node.getText() === 'QueryScopePart') {
-            state = QSState.QSPTypeReference
-          } else if (node.getText() === 'QueryScope') {
-            state = QSState.QSTypeReference
-          } else {
-            state = QSState.Start
+        if (objectType === QSType.QueryScope) {
+          if (ts.isObjectLiteralExpression(node)) {
+            return startQueryScopeObject(node)
           }
-        } else if (state === QSState.QSPTypeReference) {
+        } else if (objectType === QSType.QueryScopePart) {
           if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) {
-            state = QSState.Start
-            removeNode = true
             return startPartExpander(node)
           }
-        } else if (state === QSState.QSTypeReference && ts.isObjectLiteralExpression(node)) {
-          state = QSState.Start
-          removeNode = false
-          return startQueryScopeObject(node)
+        } else {
+          if (ts.isIdentifier(node)) {
+            variableName = node.getText()
+          } else if (ts.isTypeReferenceNode(node)) {
+            if (node.getText() === 'QueryScopePart') {
+              objectType = QSType.QueryScopePart
+            } else if (node.getText() === 'QueryScope') {
+              objectType = QSType.QueryScope
+            } else {
+              return node
+            }
+          }
         }
         return ts.visitEachChild(node, visitConstVariable, ctx)
       };
       if (ts.isVariableStatement(node) && node.getText().startsWith('const ')) {
         let newNode = visitConstVariable(node)
-        if (removeNode) {
-          console.log('Should remove QueryScopePart type, but undefined for some reason is not a Node type')
-          return newNode
+        if (objectType === QSType.QueryScopePart) {
+          // Should be able to remove QueryScopePart type by returning undefined,
+          // however for some reason is not a Node type')
+          return undefined
         } else {
           return newNode
         }
