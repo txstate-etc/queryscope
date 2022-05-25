@@ -30,6 +30,14 @@ ${firstLastOffice}
 }`
 }
 
+const queryUserOfficeInfo2: QueryScope = {
+  query: `query GetUserInfo($names:[String!]) { users(filter:{ usernames:$names }) {
+  username
+${firstLastOffice}
+}`,
+  token: 'test2'
+}
+
 // Results
 const queryUserPhoneResult: string = `query GetUserInfo($ids:[String!]) { users(filter:{ ids:$ids }) {
   id
@@ -47,13 +55,18 @@ const queryUserOfficeResult: string = `query GetUserInfo($names:[String!]) { use
 
 describe('example tests', function () {
   it('should sign queryUserPhoneInfo QueryScope type that has no token', async () => {
-    console.log('queryUserPhoneInfo = %s', JSON.stringify(queryUserPhoneInfo))
     expect(queryUserPhoneInfo.query).to.be.a('string').equal(queryUserPhoneResult)
     expect(queryUserPhoneInfo.token).to.be.a('string')
   })
   it('should sign queryUserOfficeInfo QueryScope type that has a blank token field appearing before query field', async () => {
-    console.log('queryUserOfficeInfo = %s', JSON.stringify(queryUserOfficeInfo))
     expect(queryUserOfficeInfo.query).to.be.a('string').equal(queryUserOfficeResult)
     expect(queryUserOfficeInfo.token).to.be.a('string')
+  })
+  it('should sign queryUserOfficeInfo2 QueryScope type that has a token field and value appearing after query field', async () => {
+    expect(queryUserOfficeInfo.query).to.be.a('string').equal(queryUserOfficeResult)
+    expect(queryUserOfficeInfo.token).to.be.a('string')
+  })
+  it('should find queryUserOfficeInfo query and token field values equal queryUserOfficeInfo2 field values', async () => {
+    expect(queryUserOfficeInfo).to.be.eqls(queryUserOfficeInfo2)
   })
 })

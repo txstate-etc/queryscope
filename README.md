@@ -65,7 +65,8 @@ const queryUserOfficeInfo: QueryScope = {
   query: `query GetUserInfo($names:[String!]) { users(filter:{ usernames:$names }) {
   username
 ${firstLastOffice}
-}`
+}`,
+  token: 'Blank value to be replaced with signed JWT containing hash of client_id and query'
 }
 ```
 
