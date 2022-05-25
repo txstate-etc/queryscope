@@ -94,6 +94,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
         if (ts.isIdentifier(node) && node.getText() === 'query') {
           query = true
         } else if (query && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node) ) ) {
+          query = false
           return startQueryExpander(node)
         }
         return ts.visitEachChild(node, queryScopeObject, ctx)
