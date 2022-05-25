@@ -12,7 +12,62 @@ in the image. This will generate a custom image per private key/service. If thes
 environment variables are missing the transformer will print out a warning, but will
 not error out. This is because developers may not have access to these keys, however
 they may still want to be able to test their application against a development tier
-backend with QueryScope turned off.
+backend with QueryScope features turned off.
+
+## Queryscope types
+There are two types provided by the queryscope package. Both types must be defined as
+a **const** as they should not be changing at runtime.
+- `QueryScope` type is an object that will contain both the query and an optional token
+field. During the build process the tokenizer transformer will tie the value in the
+query field along with the client id provided as an environment variable by hashing
+them. The tokenizer then signs the hashed value with the private key which is also
+provided as an environment variable. The graphql server can now verify that this query
+is allowed by this client/service.
+- `QueryScopePart` type is a string or template of strings that can be defined elsewhere
+in the file and put together to produce a value for the `QueryScope.query` field. This
+allows us to setup commonly used fields as `QueryScopePart`s that we may want to define
+in one place and then insert them in queries. Note that QueryScopePart variables will
+be removed at build time, and will not be available in the runtime code. These types are
+only used to build the query. Once the queries are built they are static constants and
+the parts serve no other purpose, and thus removed. This is done for size and speed
+efficiency. WARNING: Currently the queryscope tokenizer transformer only utizies the
+transformer factory which is a per file based transfomer and not the program transformer
+that allows transformers to view all the files of the project as a whole. This restricts
+the tokenizer access to `QueryScopePart` variables so that they must reside in the same
+file where the `QueryScope` objects that reference them are defined.
+
+An example of how to use both queryscoping types:
+```javascript
+import { QueryScope, QueryScopePart } from 'queryscope'
+
+// Parts
+const firstname: QueryScopePart = '  firstname'
+const lastname: QueryScopePart = `  lastname`
+const firstLastPhone: QueryScopePart = `${firstname}
+${lastname}
+  phonenumber`
+
+// Query
+const queryUserPhoneInfo: QueryScope = {
+  query: `query GetUserInfo($ids:[String!]) { users(filter:{ ids:$ids }) {
+  id
+${firstLastPhone}
+}`
+}
+
+// Parts
+const firstLastOffice: QueryScopePart = `${firstname}
+${lastname}
+  roomnumber`
+
+// Query
+const queryUserOfficeInfo: QueryScope = {
+  query: `query GetUserInfo($names:[String!]) { users(filter:{ usernames:$names }) {
+  username
+${firstLastOffice}
+}`
+}
+```
 
 ## Application Dependency setup
 This module utilizes typescript transformers (codemods) to inject json webtokens into
