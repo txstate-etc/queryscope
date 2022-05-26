@@ -32,11 +32,10 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
     console.log("Signing client %s queries with %s issuer.", QUERYSCOPE_CLIENT_ID, QUERYSCOPE_ISSUER)
   }
   return sourceFile => {
+    // Store variable name of current node being visited
     let variableName: string|undefined
-    //   TemplateExpresson:
-    //     TemplateHead,
-    //     TemplateSpan(Identifier,TemplateMiddle),
-    //     TemplateSpan(Identifier,TemplateTail)
+    // VISITOR: for QueryScopePart type
+    // Expanded string/template if necessary and assign result to associated queryscope part
     const startPartExpander = (node: ts.Node): ts.Node => {
       if (foundQueryScopeParts.has(variableName || '_unknown')) {
         throw Error('QueryScopePart ' + variableName + 'name is already used')
@@ -66,6 +65,10 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
       };
       return partExpander(node)
     };
+    // VISITOR: for QueryScope type
+    // Expanded string/template if made up of queryscope parts if necessary
+    // then assign result to associated QueryScope.query field
+    // and generate/override associated QueryScope.token field.
     const startQueryScopeObject = (node: ts.Node): ts.Node => {
       let query = false
       let queryExpanded = ''
@@ -99,13 +102,8 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
         }
         return ts.visitEachChild(node, queryScopeObject, ctx)
       };
-      // There is an invalid case where TypeScript would produce an error
-      // during compilation, should no query property is found.
-      // Check if token mataches query and if not then return with all properties with new token value.
-      // Probably will not implement this as tokens will never exist in the ts file as they are generated
-      // at build time and will only exist within the image. We are going just overwrite the token.
-      // Check declorator to see if we wish to maintain this query and if so then return
-      // all properties with an appended token property and the generated token value
+      // There is an invalid case where TypeScript would produce an error during compilation,
+      // should no query property be found.
       const newNode = queryScopeObject(node)
       const token = syncSignQueryDigest(queryExpanded)
       if (token != null) {
@@ -117,6 +115,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
         return newNode
       }
     };
+    // VISTOR: entrypoint for visitor looking for all const variable declarations.
     const visitor = (node: ts.Node): ts.Node|undefined => {
       // Skip queryscope signing process if no client_id or private_key are provided
       // This is mostly for development work where signatures are not used.
@@ -124,6 +123,7 @@ const transformer: ts.TransformerFactory<ts.SourceFile> = ctx => {
         return node
       }
       let objectType: QSType|undefined
+      // VISTOR: for grabbing variable name and redirecting to either QueryScope or QueryScopePart types
       const visitConstVariable = (node: ts.Node): ts.Node => {
         if (objectType === QSType.QueryScope) {
           if (ts.isObjectLiteralExpression(node)) {
